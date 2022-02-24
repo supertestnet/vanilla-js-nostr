@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="https://bitcoincore.tech/apps/bitcoinjs-ui/lib/bitcoinjs-lib.js"></script>
+<script src="https://bundle.run/bip39@3.0.4"></script>
+<script src="https://bundle.run/bip32@2.0.6"></script>
+<script src="https://bundle.run/buffer@6.0.3"></script>
+<script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
+<script>
+        function computeRawPrivkey( node ) {
+                return bitcoinjs.ECPair.fromPrivateKey( node.privateKey, { network: bitcoinjs.networks.mainnet } );
+        }
+</script>
+<script>
+        function getPrivkeyHex( backupwords, path, index ) {
+                var seed = bip39.mnemonicToSeedSync( backupwords );
+                var node = bip32.fromSeed( seed );
+                var path = "m/" + path + "/" + index;
+                var root = node;
+                var child = root.derivePath( path );
+                return computeRawPrivkey( child );
+        }
+</script>
+<script>
+        function toHexString(byteArray) {
+                return Array.from(byteArray, function(byte) {
+                        return ('0' + (byte & 0xFF).toString(16)).slice(-2);
+                }).join('');
+        }
+</script>
+<script>
+        var backupwords = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        document.write( "your backup words are " + backupwords + "<br><br>" );
+        var path = 0;
+        var index = 1;
+        var privKey = getPrivkeyHex( backupwords, path, index );
+        privKey = privKey.__D.toString( 'hex' );
+        var pubKey = nobleSecp256k1.getPublicKey( privKey, true );
+      	var pubKeyMinus2 = pubKey.substring( 2 );
+        document.write( "your public key is " + pubKeyMinus2 + "<br><br>" );
+</script>
+</head>
+<body>
+<script>
+        function normalizeRelayURL(e){let[t,...r]=e.trim().split("?");return"http"===t.slice(0,4)&&(t="ws"+t.slice(4)),"ws"!==t.slice(0,2)&&(t="wss://"+t),t.length&&"/"===t[t.length-1]&&(t=t.slice(0,-1)),[t,...r].join("?")}
+        var relay = "wss://nostr-relay.wlvs.space";
+        relay = normalizeRelayURL( relay );
+        var socket = new WebSocket( relay );
+
+        function subscribe( pubkey ) {
+          if ( !pubkey ) {
+                  var pubkey = "446801102d378f09aa200debc1acdff0f6fcf1c6d9bc1e2c7e14076d5fbc740e";
+          }
+          var filter = {
+                  "authors": [
+                          pubkey
+                  ]
+          };
+          var subscription = [ "REQ", "my-sub", filter ];
+          subscription = JSON.stringify( subscription );
+          sessionStorage.subscription = subscription;
+          socket.send( sessionStorage.subscription );
+        }
+
+        socket.addEventListener( 'open', function( event ) {
+                document.body.innerHTML += "connected to " + relay + "<br><br>";
+                document.body.innerHTML += `try using these functions: <button onclick="subscribe()">Subscribe</button> and <input type="text" id="note input" /><button onclick="makeNote( document.getElementById( 'note input' ).value )">Make note</button><br><br>`;
+        });
+
+        // Listen for messages
+        socket.addEventListener( 'message', function( event ) {
+                document.body.innerHTML += event.data + "<br><br>";
+        });
+</script>
+<script>
+        function makeNote( note ) {
+                console.log( "note: '" + note + "'" );
+                var now = Math.floor( ( new Date().getTime() ) / 1000 );
+                console.log( now );
+                var newevent = [
+                        0,
+                        pubKeyMinus2,
+                        now,
+                        1,
+                        [],
+                        note
+                ];
+                var message = JSON.stringify( newevent );
+                console.log( "message: '" + message + "'" );
+                var msgasbytes = buffer.Buffer.from( message );
+                var msghash = bitcoinjs.crypto.sha256( message ).toString( 'hex' );
+                console.log( "msghash: '" + msghash + "'" );
+                nobleSecp256k1.schnorr.sign( msghash, privKey ).then( 
+                        value => { 
+                                console.log( "type of value:", typeof( value ) );
+                                sig = value;
+                                console.log( "the sig number is:", sig );
+                                console.log( "the sig hex is:", sig );
+                                nobleSecp256k1.schnorr.verify( 
+                                        sig,
+                                        msghash,
+                                        pubKeyMinus2
+                                ).then(
+                                        value => { 
+                                                console.log( "is the signature valid for the above pubkey over the message 'test'?", value );
+                                                if ( value ) {
+                                                        var fullevent = {
+                                                                "id": msghash,
+                                                                "pubkey": pubKeyMinus2,
+                                                                "created_at": now,
+                                                                "kind": 1,
+                                                                "tags": [],
+                                                                "content": note,
+                                                                "sig": sig
+                                                        }
+                                                        var sendable = [ "EVENT", fullevent ];
+                                                        sessionStorage.sendable = JSON.stringify( sendable );
+                                                        socket.send( '["EVENT",' + JSON.stringify( JSON.parse( sessionStorage.sendable )[ 1 ] ) + ']' );
+                                                 }
+                                        }
+                               );
+                        }
+                );
+        }
+</script>
+</body>
+</html>
