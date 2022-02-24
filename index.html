@@ -36,6 +36,10 @@
         var privKey = getPrivkeyHex( backupwords, path, index );
         privKey = privKey.__D.toString( 'hex' );
         var pubKey = nobleSecp256k1.getPublicKey( privKey, true );
+        //be aware that not all valid bitcoin pubkeys are valid nostr pubkeys. Valid bitcoin pubkeys include uncompressed pubkeys (that start with 04), compressed pubkeys of the x coordinate (that start with 03), and compressed pubkeys of the y coordinate (that start with 02).
+        //Only the ones that start with 03 are valid for nostr, which then allows us to chop off the 03 when storing the pubkey.
+        //So if you change this code to generate random pubkeys, be sure to only use ones that have an 03 at the beginning.
+        //The pubkeyMinus2 variable is the pubkey created a moment ago but without the 03 at the beginning.
       	var pubKeyMinus2 = pubKey.substring( 2 );
         document.write( "your public key is " + pubKeyMinus2 + "<br><br>" );
 </script>
@@ -87,15 +91,12 @@
                 ];
                 var message = JSON.stringify( newevent );
                 console.log( "message: '" + message + "'" );
-                var msgasbytes = buffer.Buffer.from( message );
                 var msghash = bitcoinjs.crypto.sha256( message ).toString( 'hex' );
                 console.log( "msghash: '" + msghash + "'" );
                 nobleSecp256k1.schnorr.sign( msghash, privKey ).then( 
                         value => { 
-                                console.log( "type of value:", typeof( value ) );
                                 sig = value;
-                                console.log( "the sig number is:", sig );
-                                console.log( "the sig hex is:", sig );
+                                console.log( "the sig is:", sig );
                                 nobleSecp256k1.schnorr.verify( 
                                         sig,
                                         msghash,
