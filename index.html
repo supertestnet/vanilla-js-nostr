@@ -81,8 +81,8 @@
                                                         if ( recipient == pubKeyMinus2 ) {
                                                                         document.body.innerHTML += decrypt( privKey, event[ 2 ].pubkey, event[ 2 ].content ) + " (sent by " + event[ 2 ].pubkey + ")<br><br>";
                                                         } else if ( event[ 2 ].pubkey == pubKeyMinus2 ) {
-									document.body.innerHTML += decrypt( privKey, recipient, event[ 2 ].content ) + " (sent by " + event[ 2 ].pubkey + ")<br><br>";
-							}
+                                                                        document.body.innerHTML += decrypt( privKey, recipient, event[ 2 ].content ) + " (sent by " + event[ 2 ].pubkey + ")<br><br>";
+                                                        }
                                         }
                         }
                 } else if ( event[ 2 ].kind == 1 ) {
