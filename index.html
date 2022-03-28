@@ -78,7 +78,7 @@
                         var i; for ( i=0; i<event[ 2 ].tags.length; i++ ) {
                                         if ( event[ 2 ].tags[ i ] && event[ 2 ].tags[ i ][ 1 ] ) {
                                                         var recipient = event[ 2 ].tags[ i ][ 1 ];
-                                                        if ( recipient == pubKeyMinus2 ) {
+                                                        if ( recipient == pubKeyMinus2 || event[ 2 ].pubkey == pubKeyMinus2 ) {
                                                                         document.body.innerHTML += decrypt( privKey, event[ 2 ].pubkey, event[ 2 ].content ) + " (sent by " + event[ 2 ].pubkey + ")<br><br>";
                                                         }
                                         }
