@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="https://bitcoincore.tech/apps/bitcoinjs-ui/lib/bitcoinjs-lib.js"></script>
+<script src="https://bundle.run/bip39@3.0.4"></script>
+<script src="https://bundle.run/bip32@2.0.6"></script>
+<script src="https://bundle.run/buffer@6.0.3"></script>
+<script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
+<script src="https://bundle.run/browserify-cipher@1.0.1"></script>
+<script>
+        function computeRawPrivkey( node ) {
+                return bitcoinjs.ECPair.fromPrivateKey( node.privateKey, { network: bitcoinjs.networks.mainnet } );
+        }
+</script>
+<script>
+        function getPrivkeyHex( backupwords, path, index ) {
+                var seed = bip39.mnemonicToSeedSync( backupwords );
+                var node = bip32.fromSeed( seed );
+                var path = "m/" + path + "/" + index;
+                var root = node;
+                var child = root.derivePath( path );
+                return computeRawPrivkey( child );
+        }
+</script>
+<script>
+        function toHexString(byteArray) {
+                return Array.from(byteArray, function(byte) {
+                        return ('0' + (byte & 0xFF).toString(16)).slice(-2);
+                }).join('');
+        }
+</script>
+<script>
+        var backupwords = bip39.generateMnemonic();
+        document.write( "your backup words are " + backupwords + "<br><br>" );
+        var path = 0;
+        var index = 1;
+        var privKey = getPrivkeyHex( backupwords, path, index );
+        privKey = privKey.__D.toString( 'hex' );
+        var pubKey = nobleSecp256k1.getPublicKey( privKey, true );
+        //be aware that not all valid bitcoin pubkeys are valid nostr pubkeys. Valid bitcoin pubkeys include uncompressed pubkeys (that start with 04), compressed pubkeys whose y coordinate is positive (that start with 02), and compressed pubkeys whose y coordinate is negative (that start with 03).
+        //Only the ones that start with 02 are valid for nostr, which then allows us to chop off the 02 when storing the pubkey.
+        //So if you change this code to generate random pubkeys, be sure to only use ones that have an 02 at the beginning.
+        //The pubkeyMinus2 variable is the pubkey created a moment ago but without the 02 at the beginning.
+      	var pubKeyMinus2 = pubKey.substring( 2 );
+        document.write( "your public key is " + pubKeyMinus2 + "<br><br>" );
+</script>
+</head>
+<body>
+<script>
+        function normalizeRelayURL(e){let[t,...r]=e.trim().split("?");return"http"===t.slice(0,4)&&(t="ws"+t.slice(4)),"ws"!==t.slice(0,2)&&(t="wss://"+t),t.length&&"/"===t[t.length-1]&&(t=t.slice(0,-1)),[t,...r].join("?")}
+        var relay = "wss://nostr-relay.wlvs.space";
+        relay = normalizeRelayURL( relay );
+        var socket = new WebSocket( relay );
+
+        function subscribe( pubkey ) {
+          var filter = {
+                  "authors": [
+                          pubkey
+                  ]
+          };
+          var subscription = [ "REQ", "my-sub", filter ];
+          subscription = JSON.stringify( subscription );
+          sessionStorage.subscription = subscription;
+          socket.send( sessionStorage.subscription );
+        }
+
+        socket.addEventListener( 'open', function( event ) {
+                document.body.innerHTML += "connected to " + relay + "<br><br>";
+                document.body.innerHTML += `try using these functions: <button onclick="subscribe( pubKeyMinus2 )">Subscribe to yourself</button> and <input type="text" id="note input" placeholder="enter a public note here" /><button onclick="makeNote( document.getElementById( 'note input' ).value )">Make public note</button><br><br>`;
+                document.body.innerHTML += `also this one: <input type="text" id="subscribable pubkey" placeholder="enter a pubkey you want to subscribe to" style="width: 100%; max-width: 300px;" /><button onclick="subscribe( document.getElementById( 'subscribable pubkey' ).value )">Subscribe to someone else</button><br><br>`;
+                document.body.innerHTML += `and this one: <input type="text" id="private note" placeholder="enter a private note here" /> <input type="text" id="recipient pubkey" placeholder="enter a pubkey to send a private message to" style="width: 100%; max-width: 300px;" /><button onclick="makePrivateNote( document.getElementById( 'private note' ).value, document.getElementById( 'recipient pubkey' ).value )">Make private note</button><br><br>`;
+        });
+
+        // Listen for messages
+        socket.addEventListener( 'message', function( event ) {
+                var event = JSON.parse( event.data );
+                if ( event[ 2 ].kind == 4 ) {
+                        var i; for ( i=0; i<event[ 2 ].tags.length; i++ ) {
+                                        if ( event[ 2 ].tags[ i ] && event[ 2 ].tags[ i ][ 1 ] ) {
+                                                        var recipient = event[ 2 ].tags[ i ][ 1 ];
+                                                        if ( recipient == pubKeyMinus2 ) {
+                                                                        document.body.innerHTML += decrypt( privKey, event[ 2 ].pubkey, event[ 2 ].content ) + " (sent privately by " + event[ 2 ].pubkey + ")<br><br>";
+                                                        } else if ( event[ 2 ].pubkey == pubKeyMinus2 ) {
+                                                                        document.body.innerHTML += decrypt( privKey, recipient, event[ 2 ].content ) + " (sent privately by " + event[ 2 ].pubkey + ")<br><br>";
+                                                        }
+                                        }
+                        }
+                } else if ( event[ 2 ].kind == 1 ) {
+                        document.body.innerHTML += event[ 2 ].content + " (sent publicly by " + event[ 2 ].pubkey + ")<br><br>";
+                }
+        });
+</script>
+<script>
+        function makeNote( note ) {
+                console.log( "note: '" + note + "'" );
+                var now = Math.floor( ( new Date().getTime() ) / 1000 );
+                console.log( now );
+                var newevent = [
+                        0,
+                        pubKeyMinus2,
+                        now,
+                        1,
+                        [],
+                        note
+                ];
+                var message = JSON.stringify( newevent );
+                console.log( "message: '" + message + "'" );
+                var msghash = bitcoinjs.crypto.sha256( message ).toString( 'hex' );
+                console.log( "msghash: '" + msghash + "'" );
+                nobleSecp256k1.schnorr.sign( msghash, privKey ).then( 
+                        value => { 
+                                sig = value;
+                                console.log( "the sig is:", sig );
+                                nobleSecp256k1.schnorr.verify( 
+                                        sig,
+                                        msghash,
+                                        pubKeyMinus2
+                                ).then(
+                                        value => { 
+                                                console.log( "is the signature valid for the above pubkey over the message 'test'?", value );
+                                                if ( value ) {
+                                                        var fullevent = {
+                                                                "id": msghash,
+                                                                "pubkey": pubKeyMinus2,
+                                                                "created_at": now,
+                                                                "kind": 1,
+                                                                "tags": [],
+                                                                "content": note,
+                                                                "sig": sig
+                                                        }
+                                                        var sendable = [ "EVENT", fullevent ];
+                                                        sessionStorage.sendable = JSON.stringify( sendable );
+                                                        socket.send( '["EVENT",' + JSON.stringify( JSON.parse( sessionStorage.sendable )[ 1 ] ) + ']' );
+                                                 }
+                                        }
+                               );
+                        }
+                );
+        }
+        function makePrivateNote( note, recipientpubkey ) {
+                console.log( "note: '" + note + "'" );
+                var now = Math.floor( ( new Date().getTime() ) / 1000 );
+                console.log( now );
+                var privatenote = encrypt( privKey, recipientpubkey, note );
+                var newevent = [
+                        0,
+                        pubKeyMinus2,
+                        now,
+                        4,
+                        [['p', recipientpubkey]],
+                        privatenote
+                ];
+                var message = JSON.stringify( newevent );
+                console.log( "message: '" + message + "'" );
+                var msghash = bitcoinjs.crypto.sha256( message ).toString( 'hex' );
+                console.log( "msghash: '" + msghash + "'" );
+                nobleSecp256k1.schnorr.sign( msghash, privKey ).then(
+                        value => {
+                                sig = value;
+                                console.log( "the sig is:", sig );
+                                nobleSecp256k1.schnorr.verify(
+                                        sig,
+                                        msghash,
+                                        pubKeyMinus2
+                                ).then(
+                                        value => {
+                                                console.log( "is the signature valid for the above pubkey over the message 'test'?", value );
+                                                if ( value ) {
+                                                        var fullevent = {
+                                                                "id": msghash,
+                                                                "pubkey": pubKeyMinus2,
+                                                                "created_at": now,
+                                                                "kind": 4,
+                                                                "tags": [['p', recipientpubkey]],
+                                                                "content": privatenote,
+                                                                "sig": sig
+                                                        }
+                                                        var sendable = [ "EVENT", fullevent ];
+                                                        sessionStorage.sendable = JSON.stringify( sendable );
+                                                        socket.send( '["EVENT",' + JSON.stringify( JSON.parse( sessionStorage.sendable )[ 1 ] ) + ']' );
+                                                 }
+                                        }
+                               );
+                        }
+                );
+        }
+        function encrypt( privkey, pubkey, text ) {
+          var key = nobleSecp256k1.getSharedSecret( privkey, '02' + pubkey, true ).substring( 2 );
+
+          var iv = window.crypto.getRandomValues( new Uint8Array(16) );
+          var cipher = browserifyCipher.createCipheriv(
+            'aes-256-cbc',
+            buffer.Buffer.from( key, 'hex' ),
+            iv
+          );
+          var encryptedMessage = cipher.update( text, "utf8", "base64" );
+          emsg = encryptedMessage + cipher.final( "base64" );
+
+          return emsg + "?iv=" + buffer.Buffer.from( iv.buffer ).toString( "base64");
+        }
+
+        function decrypt( privkey, pubkey, ciphertext ) {
+          var [ emsg, iv ] = ciphertext.split( "?iv=" );
+          var key = nobleSecp256k1.getSharedSecret( privkey, '02' + pubkey, true ).substring( 2 );
+
+          var decipher = browserifyCipher.createDecipheriv(
+            'aes-256-cbc',
+            buffer.Buffer.from( key, "hex" ),
+            buffer.Buffer.from( iv, "base64" )
+          );
+          var decryptedMessage = decipher.update( emsg, "base64" );
+          dmsg = decryptedMessage + decipher.final( "utf8" );
+
+          return dmsg;
+        }
+</script>
+</body>
+</html>
