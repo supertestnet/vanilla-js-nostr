@@ -13,10 +13,10 @@
         }
 </script>
 <script>
-        function getPrivkeyHex( backupwords, path, index ) {
+        function getPrivkeyHex( backupwords ) {
                 var seed = bip39.mnemonicToSeedSync( backupwords );
                 var node = bip32.fromSeed( seed );
-                var path = "m/" + path + "/" + index;
+                var path = "m/44'/1237'/0'/0/0";
                 var root = node;
                 var child = root.derivePath( path );
                 return computeRawPrivkey( child );
@@ -32,9 +32,7 @@
 <script>
         var backupwords = bip39.generateMnemonic();
         document.write( "your backup words are " + backupwords + "<br><br>" );
-        var path = 0;
-        var index = 1;
-        var privKey = getPrivkeyHex( backupwords, path, index );
+        var privKey = getPrivkeyHex( backupwords );
         privKey = privKey.__D.toString( 'hex' );
         var pubKey = nobleSecp256k1.getPublicKey( privKey, true );
         //be aware that not all valid bitcoin pubkeys are valid nostr pubkeys. Valid bitcoin pubkeys include uncompressed pubkeys (that start with 04), compressed pubkeys whose y coordinate is positive (that start with 02), and compressed pubkeys whose y coordinate is negative (that start with 03).
