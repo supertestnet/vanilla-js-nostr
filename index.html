@@ -8,19 +8,19 @@
 <script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
 <script src="https://bundle.run/browserify-cipher@1.0.1"></script>
 <script>
-        function computeRawPrivkey( node ) {
-                return bitcoinjs.ECPair.fromPrivateKey( node.privateKey, { network: bitcoinjs.networks.mainnet } );
-        }
+        function computeRawPrivkey( node ) {
+                return bitcoinjs.ECPair.fromPrivateKey( node.privateKey, { network: bitcoinjs.networks.mainnet } );
+        }
 </script>
 <script>
-        function getPrivkeyHex( backupwords ) {
-                var seed = bip39.mnemonicToSeedSync( backupwords );
-                var node = bip32.fromSeed( seed );
-                var path = "m/44'/1237'/0'/0/0";
-                var root = node;
-                var child = root.derivePath( path );
-                return computeRawPrivkey( child );
-        }
+        function getPrivkeyHex( backupwords ) {
+                var seed = bip39.mnemonicToSeedSync( backupwords );
+                var node = bip32.fromSeed( seed );
+                var path = "m/44'/1237'/0'/0/0";
+                var root = node;
+                var child = root.derivePath( path );
+                return computeRawPrivkey( child );
+        }
 </script>
 <script>
         function toHexString(byteArray) {
@@ -30,7 +30,7 @@
         }
 </script>
 <script>
-        var backupwords = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        var backupwords = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon";
         document.write( "your backup words are " + backupwords + "<br><br>" );
         var privKey = getPrivkeyHex( backupwords );
         privKey = privKey.__D.toString( 'hex' );
@@ -46,7 +46,7 @@
 <body>
 <script>
         function normalizeRelayURL(e){let[t,...r]=e.trim().split("?");return"http"===t.slice(0,4)&&(t="ws"+t.slice(4)),"ws"!==t.slice(0,2)&&(t="wss://"+t),t.length&&"/"===t[t.length-1]&&(t=t.slice(0,-1)),[t,...r].join("?")}
-        var relay = "wss://nostr-relay.wlvs.space";
+        var relay = "wss://relay.nostr.info";
         relay = normalizeRelayURL( relay );
         var socket = new WebSocket( relay );
 
@@ -72,6 +72,7 @@
         // Listen for messages
         socket.addEventListener( 'message', function( event ) {
                 var event = JSON.parse( event.data );
+                if ( !event[ 2 ] || !event[ 2 ].kind ) return;
                 if ( event[ 2 ].kind == 4 ) {
                         var i; for ( i=0; i<event[ 2 ].tags.length; i++ ) {
                                         if ( event[ 2 ].tags[ i ] && event[ 2 ].tags[ i ][ 1 ] ) {
