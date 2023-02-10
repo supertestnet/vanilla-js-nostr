@@ -72,7 +72,7 @@
         // Listen for messages
         socket.addEventListener( 'message', function( event ) {
                 var event = JSON.parse( event.data );
-                if ( !event[ 2 ] || !event[ 2 ].kind ) return;
+                if ( !event[ 2 ] || !event[ 2 ].hasOwnProperty('kind') ) return;
                 if ( event[ 2 ].kind == 4 ) {
                         var i; for ( i=0; i<event[ 2 ].tags.length; i++ ) {
                                         if ( event[ 2 ].tags[ i ] && event[ 2 ].tags[ i ][ 1 ] ) {
