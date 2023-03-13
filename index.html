@@ -46,7 +46,7 @@
 <body>
 <script>
         function normalizeRelayURL(e){let[t,...r]=e.trim().split("?");return"http"===t.slice(0,4)&&(t="ws"+t.slice(4)),"ws"!==t.slice(0,2)&&(t="wss://"+t),t.length&&"/"===t[t.length-1]&&(t=t.slice(0,-1)),[t,...r].join("?")}
-        var relay = "wss://relay.nostr.info";
+        var relay = "wss://nostr.0ne.day";
         relay = normalizeRelayURL( relay );
         var socket = new WebSocket( relay );
 
